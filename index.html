@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4a90e2">
+    <meta name="apple-mobile-web-app-title" content="电子打卡">
+    <title>电子打卡系统</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%234a90e2' width='100' height='100' rx='20'/><text y='.9em' x='50%' text-anchor='middle' font-size='70'>✓</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --bg-color: #f5f7fa;
+            --card-bg: #ffffff;
+            --text-color: #2c3e50;
+            --border-color: #e1e8ed;
+            --safe-area-top: env(safe-area-inset-top, 0px);
+            --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: var(--bg-color); color: var(--text-color); min-height: 100vh; min-height: 100dvh; }
+        .guest-mode-bar { position: fixed; top: var(--safe-area-top); left: 0; width: 100%; background: var(--warning-color); color: #333; text-align: center; padding: 8px; font-weight: 500; z-index: 1001; display: none; font-size: 14px; }
+        .guest-mode-bar.active { display: block; }
+        #lockscreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; padding-top: calc(var(--safe-area-top) + 20px); }
+        #lockscreen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        .lock-logo { font-size: 4rem; color: white; margin-bottom: 1.5rem; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        .lock-title { color: white; font-size: 1.8rem; margin-bottom: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .lock-title .highlight { color: var(--primary-color); }
+        .password-display { width: 100%; max-width: 280px; height: 60px; background: rgba(255,255,255,0.1); border-radius: 30px; margin-bottom: 1.5rem; display: flex; justify-content: center; align-items: center; }
+        .password-dots { display: flex; gap: 12px; }
+        .password-dot { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: all 0.3s ease; }
+        .password-dot.filled { background: var(--primary-color); box-shadow: 0 0 15px var(--primary-color); transform: scale(1.2); }
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 280px; }
+        .keypad-btn { height: 70px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); color: white; font-size: 1.6rem; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.2s ease; touch-action: manipulation; }
+        .keypad-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.25); }
+        .keypad-btn.clear { background: rgba(231,76,60,0.3); border-color: rgba(231,76,60,0.5); color: #ff6b6b; }
+        .keypad-btn.confirm { background: rgba(46,204,113,0.3); border-color: rgba(46,204,113,0.5); color: #2ecc71; }
+        .error-message { color: #ff6b6b; font-size: 0.9rem; margin-top: 1rem; height: 20px; text-align: center; opacity: 0; transition: opacity 0.3s; }
+        .error-message.show { opacity: 1; }
+        .lockscreen-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 1.5rem; width: 100%; max-width: 280px; }
+        .teacher-select-wrapper { position: relative; }
+        .teacher-select-wrapper .icon-left { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--warning-color); pointer-events: none; z-index: 1; }
+        .lockscreen-select { appearance: none; -webkit-appearance: none; width: 100%; padding: 14px 40px 14px 45px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 1rem; cursor: pointer; font-family: inherit; }
+        .lockscreen-select option { background: #2c3e50; color: white; }
+        .guest-mode-btn { width: 100%; padding: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: inherit; }
+        .guest-mode-btn i { color: var(--warning-color); }
+        .lock-status { position: fixed; top: calc(var(--safe-area-top) + 10px); right: 10px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; justify-content: center; align-items: center; color: white; font-size: 1.2rem; cursor: pointer; z-index: 1001; transition: all 0.3s ease; }
+        .lock-status.locked { color: var(--danger-color); }
+        .lock-status.guest { color: var(--warning-color); }
+        .lock-status.unlocked { color: var(--success-color); }
+        .navbar { background: var(--card-bg); border-bottom: 1px solid var(--border-color); padding-top: var(--safe-area-top); display: flex; align-items: center; justify-content: space-between; padding: 10px 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 1000; }
+        .navbar-title { font-size: 1.1rem; font-weight: 700; color: var(--primary-color); display: flex; align-items: center; gap: 0.5rem; }
+        .nav-menu { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .nav-item { padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 500; font-size: 0.7rem; color: var(--text-color); white-space: nowrap; touch-action: manipulation; }
+        .nav-item i { font-size: 1.1rem; }
+        .nav-item.active { background: var(--primary-color); color: white; }
+        .navbar-right { display: flex; align-items: center; gap: 4px; }
+        .nav-btn { min-width: 44px; height: 44px; padding: 4px 8px; border: none; border-radius: 8px; background: var(--card-bg); color: var(--text-color); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.3s ease; border: 1px solid var(--border-color); font-size: 0.6rem; gap: 2px; touch-action: manipulation; }
+        .nav-btn i { font-size: 1rem; }
+        .container { padding: 1rem; padding-bottom: calc(var(--safe-area-bottom) + 1rem); }
+        .content-section { background: var(--card-bg); border-radius: 12px; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.6rem; }
+        .toolbar-left { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn { padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; touch-action: manipulation; font-family: inherit; }
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-warning { background: var(--warning-color); color: white; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-sm { padding: 8px 12px; font-size: 0.85rem; }
+        #mainClock { text-align: center; padding: 1rem 0; margin-bottom: 1rem; background: linear-gradient(135deg, rgba(74,144,226,0.08), rgba(80,227,194,0.08)); border-radius: 12px; border: 1px solid var(--border-color); }
+        #mainClockTime { font-size: 2.8rem; font-weight: 700; color: var(--primary-color); letter-spacing: 2px; line-height: 1.2; }
+        #mainClockDate { font-size: 1rem; color: var(--text-color); opacity: 0.6; margin-top: 0.3rem; }
+        .stats-bar { display: flex; gap: 0.8rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .stat-card { background: var(--card-bg); border-radius: 12px; padding: 0.8rem 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 0.8rem; flex: 1; min-width: 100px; }
+        .stat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: white; }
+        .stat-icon.total { background: var(--primary-color); }
+        .stat-icon.checked { background: var(--success-color); }
+        .stat-icon.remaining { background: var(--warning-color); }
+        .stat-info { display: flex; flex-direction: column; }
+        .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+        .stat-label { font-size: 0.75rem; color: #999; margin-top: 2px; }
+        .checkin-container { display: flex; flex-direction: column; gap: 1rem; }
+        .student-sidebar { background: var(--card-bg); border-radius: 12px; padding: 0.8rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .student-sidebar h2 { font-size: 1rem; margin-bottom: 0.8rem; color: var(--primary-color); border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
+        .student-pool { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .student-card { background: linear-gradient(135deg, var(--card-bg), rgba(74,144,226,0.05)); border-radius: 10px; padding: 8px; text-align: center; cursor: pointer; transition: all 0.3s ease; border: 2px solid var(--border-color); position: relative; touch-action: manipulation; }
+        .student-card:active { transform: scale(0.98); }
+        .student-card.selected { border-color: var(--primary-color); box-shadow: 0 0 8px rgba(74,144,226,0.5); }
+        .student-card .hint-tags { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 4px; }
+        .student-card .hint-tag { width: 18px; height: 18px; border-radius: 50%; background: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: white; }
+        .student-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--primary-color); display: flex; align-items: center; justify-content: center; margin: 0 auto 4px; font-size: 1.2rem; color: white; overflow: hidden; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .student-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .student-name { font-weight: 600; font-size: 0.8rem; }
+        .main-content { background: var(--card-bg); border-radius: 12px; padding: 0.8rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .main-content h3 { margin-bottom: 0.8rem; color: var(--primary-color); font-size: 1rem; }
+        .checkin-area { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px; background: rgba(74,144,226,0.05); border-radius: 12px; min-height: 200px; }
+        .checkin-slot { background: var(--card-bg); border: 2px dashed var(--border-color); border-radius: 12px; padding: 8px; text-align: center; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.3s ease; position: relative; touch-action: manipulation; }
+        .checkin-slot.available { border-color: var(--primary-color); cursor: pointer; }
+        .checkin-slot.filled { border-style: solid; border-color: var(--success-color); background: rgba(46,204,113,0.05); cursor: pointer; }
+        .slot-number { font-size: 0.7rem; color: #999; margin-bottom: 4px; }
+        .empty-slot { color: #ccc; font-size: 0.75rem; }
+        .checked-student { position: relative; width: 100%; }
+        .checked-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--success-color); display: flex; align-items: center; justify-content: center; margin: 0 auto 4px; font-size: 1.3rem; color: white; overflow: hidden; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .checked-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .checked-name { font-weight: 600; font-size: 0.75rem; }
+        .checkin-time { font-size: 0.65rem; color: #666; margin-top: 2px; }
+        .hint-badges { position: absolute; top: -6px; right: -6px; display: flex; flex-wrap: wrap; gap: 2px; max-width: 50px; justify-content: flex-end; }
+        .hint-badge { width: 20px; height: 20px; border-radius: 50%; background: var(--warning-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .student-actions { display: flex; gap: 4px; margin-top: 4px; justify-content: center; }
+        .action-btn { width: 26px; height: 26px; border: none; border-radius: 50%; cursor: pointer; font-size: 0.7rem; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
+        .action-btn:active { transform: scale(0.9); }
+        .action-btn-hint { background: var(--warning-color); color: white; }
+        .action-btn-record { background: var(--primary-color); color: white; }
+        .action-btn-remove { background: var(--danger-color); color: white; }
+        .remaining-section { margin-top: 1rem; padding: 0.8rem; background: #fff3cd; border-radius: 10px; border-left: 4px solid var(--warning-color); }
+        .remaining-section h3 { color: #856404; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; }
+        .remaining-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .remaining-item { background: white; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .chart-container { background: var(--card-bg); border-radius: 12px; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem; }
+        .chart-wrapper { position: relative; height: 350px; }
+        .chart-controls { display: flex; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+        .chart-controls label { font-weight: 500; font-size: 0.85rem; }
+        .chart-controls select, .chart-controls input[type="date"] { padding: 8px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.85rem; background: var(--bg-color); color: var(--text-color); }
+        .chart-type-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 0.5rem; }
+        .chart-type-btn { padding: 8px 12px; border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-color); color: var(--text-color); cursor: pointer; font-size: 0.8rem; transition: all 0.3s; display: flex; align-items: center; gap: 4px; touch-action: manipulation; }
+        .chart-type-btn:active { transform: scale(0.96); }
+        .chart-type-btn.active { border-color: var(--primary-color); background: var(--primary-color); color: white; }
+        .table-container { background: var(--card-bg); border-radius: 12px; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem; overflow-x: auto; }
+        .table-toolbar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+        .table-toolbar select, .table-toolbar input[type="date"] { padding: 8px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.85rem; background: var(--bg-color); color: var(--text-color); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background: rgba(74,144,226,0.1); font-weight: 600; color: var(--primary-color); white-space: nowrap; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; overscroll-behavior: contain; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--card-bg); border-radius: 16px; padding: 1.2rem; max-width: 500px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); margin: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); }
+        .modal-header h2 { color: var(--primary-color); font-size: 1.1rem; }
+        .close-btn { background: none; border: none; font-size: 1.8rem; cursor: pointer; color: #999; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; }
+        .close-btn:hover { color: var(--danger-color); background: rgba(231,76,60,0.1); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 1rem; transition: border-color 0.3s; background: var(--bg-color); color: var(--text-color); font-family: inherit; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
+        .form-row { display: grid; grid-template-columns: 1fr; gap: 0.8rem; }
+        .photo-upload-area { border: 2px dashed var(--border-color); border-radius: 12px; padding: 1rem; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--bg-color); }
+        .photo-upload-area:hover { border-color: var(--primary-color); background: rgba(74,144,226,0.05); }
+        .photo-preview { width: 70px; height: 70px; border-radius: 50%; margin: 0 auto 0.8rem; overflow: hidden; background: var(--primary-color); display: flex; align-items: center; justify-content: center; }
+        .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .upload-hint { color: #999; font-size: 0.85rem; }
+        .hint-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .hint-option { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border: 2px solid var(--border-color); border-radius: 10px; cursor: pointer; transition: all 0.3s; font-size: 0.85rem; position: relative; touch-action: manipulation; }
+        .hint-option:active { transform: scale(0.96); }
+        .hint-option.selected { border-color: var(--primary-color); background: rgba(74,144,226,0.1); }
+        .hint-option-icon { font-size: 1.8rem; }
+        .modal-footer { display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1.2rem; padding-top: 0.8rem; border-top: 1px solid var(--border-color); }
+        .class-tabs { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .class-tab { padding: 8px 16px; border: 2px solid var(--border-color); border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: all 0.3s; background: var(--bg-color); white-space: nowrap; touch-action: manipulation; }
+        .class-tab.active { border-color: var(--primary-color); background: var(--primary-color); color: white; }
+        .class-tab-add { padding: 8px 14px; border: 2px dashed var(--border-color); border-radius: 20px; cursor: pointer; font-size: 0.9rem; background: transparent; color: var(--primary-color); white-space: nowrap; touch-action: manipulation; }
+        .teacher-manage-list { max-height: 200px; overflow-y: auto; }
+        .teacher-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color); }
+        .teacher-info { display: flex; align-items: center; gap: 0.8rem; }
+        .teacher-avatar-small { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-color); display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem; }
+        .page-footer { text-align: center; padding: 1rem; margin-top: 1rem; border-top: 1px solid var(--border-color); color: #999; font-size: 0.8rem; }
+        .batch-textarea { width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 1rem; resize: vertical; background: var(--bg-color); color: var(--text-color); font-family: inherit; }
+        .help-content { line-height: 1.8; font-size: 0.9rem; }
+        .help-content h3 { color: var(--primary-color); margin: 1rem 0 0.5rem; font-size: 1rem; }
+        .help-content ul { padding-left: 1.2rem; }
+        .evaluation-section { margin-top: 1rem; }
+        .evaluation-item { background: var(--bg-color); border-radius: 10px; padding: 0.8rem; margin-bottom: 0.8rem; border-left: 4px solid var(--warning-color); }
+        .evaluation-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; font-weight: 600; }
+        .evaluation-icon { font-size: 1.4rem; }
+        .eval-option { padding: 8px 14px; border: 2px solid var(--border-color); border-radius: 20px; cursor: pointer; transition: all 0.3s; font-size: 0.85rem; display: inline-block; margin: 4px; touch-action: manipulation; }
+        .eval-option.selected { border-color: var(--primary-color); background: var(--primary-color); color: white; }
+        @media (max-width: 400px) { .student-pool { grid-template-columns: repeat(3, 1fr); } .checkin-area { grid-template-columns: repeat(2, 1fr); } .hint-options { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 768px) { .checkin-area { grid-template-columns: repeat(5, 1fr); } .student-pool { grid-template-columns: repeat(6, 1fr); } .form-row { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="guest-mode-bar" id="guestModeBar">游客模式：您只能查看数据</div>
+    <div class="lock-status locked" id="lockStatusBtn" onclick="lockScreen()" title="锁定状态"><i class="fas fa-lock"></i></div>
+
+    <div id="lockscreen">
+        <div class="lock-logo"><i class="fas fa-clipboard-check"></i></div>
+        <h1 class="lock-title"><span class="highlight">电子</span>打卡系统</h1>
+        <div class="password-display"><div class="password-dots">
+            <div class="password-dot" id="dot0"></div><div class="password-dot" id="dot1"></div>
+            <div class="password-dot" id="dot2"></div><div class="password-dot" id="dot3"></div>
+            <div class="password-dot" id="dot4"></div><div class="password-dot" id="dot5"></div>
+        </div></div>
+        <div class="keypad" id="keypad">
+            <div class="keypad-btn" data-value="1">1</div><div class="keypad-btn" data-value="2">2</div><div class="keypad-btn" data-value="3">3</div>
+            <div class="keypad-btn" data-value="4">4</div><div class="keypad-btn" data-value="5">5</div><div class="keypad-btn" data-value="6">6</div>
+            <div class="keypad-btn" data-value="7">7</div><div class="keypad-btn" data-value="8">8</div><div class="keypad-btn" data-value="9">9</div>
+            <div class="keypad-btn clear" data-value="clear"><i class="fas fa-backspace"></i></div>
+            <div class="keypad-btn" data-value="0">0</div>
+            <div class="keypad-btn confirm" data-value="enter"><i class="fas fa-check"></i></div>
+        </div>
+        <div class="error-message" id="errorMsg">密码错误，请重试</div>
+        <div class="lockscreen-actions">
+            <div class="teacher-select-wrapper">
+                <i class="fas fa-chalkboard-teacher icon-left"></i>
+                <select id="teacherSelect" class="lockscreen-select"></select>
+            </div>
+            <button class="guest-mode-btn" id="guestModeBtn"><i class="fas fa-user"></i> 以游客模式进入</button>
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <div class="navbar-title"><i class="fas fa-clipboard-check"></i><span>电子打卡</span></div>
+        <div class="nav-menu">
+            <div class="nav-item active" onclick="switchSection('checkin')"><i class="fas fa-home"></i><span>打卡</span></div>
+            <div class="nav-item" onclick="switchSection('class')"><i class="fas fa-users"></i><span>班级</span></div>
+            <div class="nav-item" onclick="switchSection('chart')"><i class="fas fa-chart-bar"></i><span>图表</span></div>
+            <div class="nav-item" onclick="switchSection('table')"><i class="fas fa-table"></i><span>表格</span></div>
+        </div>
+        <div class="navbar-right">
+            <button class="nav-btn" onclick="toggleTheme()" title="主题"><i class="fas fa-moon"></i></button>
+            <button class="nav-btn" onclick="lockScreen()" title="锁定"><i class="fas fa-lock"></i></button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="checkinSection" class="content-section">
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <button class="btn btn-primary btn-sm" onclick="openAddStudentModal()"><i class="fas fa-plus"></i> 添加</button>
+                    <button class="btn btn-success btn-sm" onclick="openBatchAddModal()"><i class="fas fa-users"></i> 批量</button>
+                    <button class="btn btn-warning btn-sm" onclick="resetCheckin()"><i class="fas fa-redo"></i> 重置</button>
+                    <button class="btn btn-success btn-sm" onclick="completeAndSave()"><i class="fas fa-check-circle"></i> 完成</button>
+                </div>
+            </div>
+            <div id="mainClock">
+                <div id="mainClockTime">--:--:--</div>
+                <div id="mainClockDate">加载中...</div>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-card"><div class="stat-icon total"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-value" id="totalStat">0</div><div class="stat-label">总人数</div></div></div>
+                <div class="stat-card"><div class="stat-icon checked"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="stat-value" id="checkedStat">0</div><div class="stat-label">已打卡</div></div></div>
+                <div class="stat-card"><div class="stat-icon remaining"><i class="fas fa-clock"></i></div><div class="stat-info"><div class="stat-value" id="remainingStat">0</div><div class="stat-label">未打卡</div></div></div>
+            </div>
+            <div class="checkin-container">
+                <div class="student-sidebar">
+                    <h2><i class="fas fa-user-friends"></i> 学生池</h2>
+                    <div class="student-pool" id="studentPool"></div>
+                </div>
+                <div class="main-content">
+                    <h3><i class="fas fa-th"></i> 打卡区域</h3>
+                    <div class="checkin-area" id="checkinArea"></div>
+                    <div class="remaining-section" id="remainingSection" style="display: none;">
+                        <h3><i class="fas fa-exclamation-triangle"></i> 未打卡学生</h3>
+                        <div class="remaining-list" id="remainingList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="classSection" class="content-section" style="display: none;">
+            <h2 style="margin-bottom: 1rem; color: var(--primary-color); font-size: 1.1rem;"><i class="fas fa-users"></i> 班级管理</h2>
+            <div class="class-tabs" id="classTabs"></div>
+            <div class="form-row">
+                <div class="form-group"><label>班级名称</label><input type="text" id="className" placeholder="请输入班级名称"></div>
+                <div class="form-group"><label>班级人数</label><input type="number" id="classCount" min="1" placeholder="自动统计" readonly></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>行数</label><input type="number" id="gridRows" min="1" max="10" value="4"></div>
+                <div class="form-group"><label>列数</label><input type="number" id="gridCols" min="1" max="10" value="5"></div>
+            </div>
+            <div style="margin-top: 1rem; display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                <button class="btn btn-success btn-sm" onclick="openBatchAddModal()"><i class="fas fa-users"></i> 批量添加</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteCurrentClass()"><i class="fas fa-trash"></i> 删除班级</button>
+            </div>
+            <div style="margin-top: 1rem;"><h3 style="margin-bottom: 0.8rem; color: var(--primary-color); font-size: 1rem;"><i class="fas fa-user-edit"></i> 学生管理</h3>
+                <div id="studentManageList" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem;"></div>
+            </div>
+            <div class="modal-footer" style="margin-top: 1.2rem;">
+                <button class="btn btn-secondary" onclick="loadClassSettings()">加载</button>
+                <button class="btn btn-primary" onclick="saveClassSettings()">保存</button>
+            </div>
+        </div>
+
+        <div id="chartSection" class="chart-container" style="display: none;">
+            <h2 style="margin-bottom: 1rem; color: var(--primary-color); font-size: 1.1rem;"><i class="fas fa-chart-bar"></i> 统计图表</h2>
+            <div class="chart-controls">
+                <label>学生：</label><select id="chartStudentFilter" onchange="initChart()"><option value="all">全部学生</option></select>
+                <label>日期：</label><input type="date" id="chartDateStart" onchange="initChart()"><span>至</span><input type="date" id="chartDateEnd" onchange="initChart()">
+                <button class="btn btn-sm btn-secondary" onclick="chartDateToday()">今天</button>
+                <button class="btn btn-sm btn-secondary" onclick="chartDateThisWeek()">本周</button>
+            </div>
+            <div class="chart-type-btns">
+                <button class="chart-type-btn active" data-type="bar" onclick="setChartType('bar',this)"><i class="fas fa-chart-bar"></i> 柱状</button>
+                <button class="chart-type-btn" data-type="pie" onclick="setChartType('pie',this)"><i class="fas fa-chart-pie"></i> 饼图</button>
+                <button class="chart-type-btn" data-type="doughnut" onclick="setChartType('doughnut',this)"><i class="fas fa-circle-notch"></i> 环形</button>
+            </div>
+            <div class="chart-wrapper"><canvas id="checkinChart"></canvas></div>
+        </div>
+
+        <div id="tableSection" class="table-container" style="display: none;">
+            <h2 style="margin-bottom: 1rem; color: var(--primary-color); font-size: 1.1rem;"><i class="fas fa-table"></i> 打卡记录</h2>
+            <div class="table-toolbar">
+                <select id="tableStudentFilter" onchange="renderRecordsTable()"><option value="all">全部学生</option></select>
+                <input type="date" id="tableDateStart" onchange="renderRecordsTable()"><span>至</span><input type="date" id="tableDateEnd" onchange="renderRecordsTable()">
+                <button class="btn btn-sm btn-secondary" onclick="tableDateToday()">今天</button>
+                <button class="btn btn-sm btn-primary" onclick="generateTodayTable()"><i class="fas fa-calendar-day"></i> 生成</button>
+                <button class="btn btn-sm btn-success" onclick="exportTableCSV()"><i class="fas fa-file-export"></i> 导出</button>
+            </div>
+            <table id="recordsTable"><thead id="recordsTableHead"></thead><tbody id="recordsTableBody"></tbody></table>
+        </div>
+
+        <div class="page-footer">
+            <p>© 苏州工业园区仁爱学校</p>
+            <p>电子打卡系统 V2.0</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="addStudentModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-user-plus"></i> 添加学生</h2><button class="close-btn" onclick="closeModal('addStudentModal')">&times;</button></div>
+        <div class="form-group"><label>学生姓名</label><input type="text" id="studentName" placeholder="请输入学生姓名"></div>
+        <div class="form-group"><label>性别</label>
+            <div style="display:flex;gap:0.8rem;">
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;padding:10px 16px;border:2px solid var(--border-color);border-radius:10px;" id="genderMaleLabel" onclick="selectGender('male')"><input type="radio" name="gender" value="male" checked style="display:none;"><span style="font-size:1.2rem;">👦</span><span>男生</span></label>
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;padding:10px 16px;border:2px solid var(--border-color);border-radius:10px;" id="genderFemaleLabel" onclick="selectGender('female')"><input type="radio" name="gender" value="female" style="display:none;"><span style="font-size:1.2rem;">👧</span><span>女生</span></label>
+            </div>
+        </div>
+        <div class="form-group"><label>上传照片（可选）</label>
+            <div class="photo-upload-area" onclick="document.getElementById('studentPhoto').click()"><i class="fas fa-camera" style="font-size:1.2rem;color:var(--primary-color);"></i><div class="upload-hint">点击上传照片</div></div>
+            <input type="file" id="studentPhoto" accept="image/*" style="display: none;" onchange="previewPhoto(this)">
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('addStudentModal')">取消</button><button class="btn btn-primary" onclick="addStudent()">确认添加</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="batchAddModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-users"></i> 批量添加</h2><button class="close-btn" onclick="closeModal('batchAddModal')">&times;</button></div>
+        <div class="form-group"><label>请输入学生姓名，每行一个</label><textarea class="batch-textarea" id="batchNames" placeholder="张三&#10;李四&#10;王五"></textarea></div>
+        <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('batchAddModal')">取消</button><button class="btn btn-primary" onclick="batchAddStudents()">批量添加</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="hintModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-tags"></i> 提示标记</h2><button class="close-btn" onclick="closeModal('hintModal')">&times;</button></div>
+        <p style="margin-bottom: 0.8rem;">为 <strong id="hintStudentName"></strong> 添加提示：</p>
+        <div class="hint-options" id="hintOptions"></div>
+        <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('hintModal')">取消</button><button class="btn btn-primary" onclick="saveHints()">保存</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="recordModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-clipboard-list"></i> 记录评价</h2><button class="close-btn" onclick="closeModal('recordModal')">&times;</button></div>
+        <p style="margin-bottom: 0.8rem;">为 <strong id="recordStudentName"></strong> 记录评价：</p>
+        <div class="evaluation-section" id="evaluationSection"></div>
+        <div class="form-group" style="margin-top: 0.8rem;"><label>备注</label><textarea id="recordNote" rows="2" placeholder="添加备注..."></textarea></div>
+        <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('recordModal')">取消</button><button class="btn btn-primary" onclick="saveRecord()">保存</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="studentActionModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-user-cog"></i> <span id="actionStudentName"></span></h2><button class="close-btn" onclick="closeModal('studentActionModal')">&times;</button></div>
+        <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem 0;">
+            <button class="btn btn-warning" onclick="closeModal('studentActionModal');openHintModal(currentStudentId)" style="width: 100%; justify-content: center; padding: 14px;"><i class="fas fa-tags"></i> 提示标记</button>
+            <button class="btn btn-primary" onclick="closeModal('studentActionModal');openRecordModal(currentStudentId)" style="width: 100%; justify-content: center; padding: 14px;"><i class="fas fa-clipboard-list"></i> 记录评价</button>
+            <button class="btn btn-danger" onclick="closeModal('studentActionModal');removeStudentFromCheckin()" style="width: 100%; justify-content: center; padding: 14px;"><i class="fas fa-times-circle"></i> 移除</button>
+        </div>
+    </div></div>
+
+    <div class="modal-overlay" id="settingsModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-cog"></i> 系统设置</h2><button class="close-btn" onclick="closeModal('settingsModal')">&times;</button></div>
+        <div class="form-group"><label>全局密码（6位数字）</label><input type="password" id="systemPassword" placeholder="输入新密码" maxlength="6"></div>
+        <div class="form-group"><label>打卡音效</label><select id="soundEnabled"><option value="true">启用</option><option value="false">禁用</option></select></div>
+        <div class="form-group"><label>选择音效</label><select id="checkinSound"><option value="success1">提示音1</option><option value="ding">清脆铃声</option><option value="chime">风铃</option></select></div>
+        <div style="margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border-color);">
+            <h3 style="margin-bottom: 0.8rem; color: var(--primary-color);"><i class="fas fa-chalkboard-teacher"></i> 教师管理</h3>
+            <div class="form-row">
+                <div class="form-group"><label>教师姓名</label><input type="text" id="newTeacherName" placeholder="输入姓名"></div>
+                <div class="form-group"><label>PIN码</label><input type="password" id="newTeacherPin" placeholder="6位数字" maxlength="6"></div>
+            </div>
+            <button class="btn btn-success btn-sm" onclick="addTeacher()" style="margin-bottom: 0.8rem;"><i class="fas fa-plus"></i> 添加教师</button>
+            <div id="teacherManageList" class="teacher-manage-list" style="border: 1px solid var(--border-color); border-radius: 8px;"></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('settingsModal')">取消</button><button class="btn btn-primary" onclick="saveSettings()">保存</button></div>
+    </div></div>
+
+    <div class="modal-overlay" id="helpModal"><div class="modal">
+        <div class="modal-header"><h2><i class="fas fa-question-circle"></i> 使用帮助</h2><button class="close-btn" onclick="closeModal('helpModal')">&times;</button></div>
+        <div class="help-content">
+            <h3><i class="fas fa-home"></i> 打卡区</h3>
+            <ul><li>点击学生池中的学生，再<strong>点击空位</strong>完成打卡</li><li>点击<strong>完成</strong>生成当天记录</li><li>数据<strong>自动保存</strong></li></ul>
+            <h3><i class="fas fa-users"></i> 班级管理</h3>
+            <ul><li>支持多班级，点击切换</li><li>可调整打卡区域行列数</li></ul>
+            <div style="margin-top:1.5rem;padding-top:1rem;border-top:2px solid var(--border-color);text-align:center;">
+                <p style="font-size:0.85rem;">© 苏州工业园区仁爱学校</p>
+            </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('helpModal')">我知道了</button></div>
+    </div></div>
+
+    <input type="file" id="restoreFileInput" accept=".json" style="display: none;" onchange="handleRestoreFile(this)">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+(function() {
+    var defaultAppData = { password: '000000', soundEnabled: true, checkinSound: 'success1', defaultTheme: 'light', classes: [{ id: 'class_1', name: '一班', gridRows: 4, gridCols: 5, students: [], checkinSlots: [] }], currentClassId: 'class_1', records: [], teachers: [{ id: 'default', name: '默认教师', pin: '000000' }], customHints: [], disabledHints: [], dailyTables: {}, nextStudentId: 100, lastCheckinDate: '' };
+    var appData = JSON.parse(JSON.stringify(defaultAppData));
+    var currentPassword = '', currentStudentId = null, selectedHints = [], selectedEvaluations = {};
+    var tempPhotoData = null, checkinChart = null, isGuestMode = false, selectedTeacherId = 'default';
+    var selectedAvatarIdx = 0, tempGender = 'male', currentChartType = 'bar';
+
+    function getNextStudentId() { if (!appData.nextStudentId) appData.nextStudentId = 100; return appData.nextStudentId++; }
+
+    var defaultHintConfig = { schoolbag: { icon: '🎒', name: '书包', evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] }, water: { icon: '💧', name: '喝水', evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] }, coat: { icon: '🧥', name: '外套', evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] }, shoes: { icon: '👟', name: '鞋子', evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] }, book: { icon: '📚', name: '书本', evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] }, stationery: { icon: '✏️', name: '文具', evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] } };
+
+    function getHintConfig() { var config = JSON.parse(JSON.stringify(defaultHintConfig)); if (appData.customHints) { for (var i = 0; i < appData.customHints.length; i++) { var h = appData.customHints[i]; config[h.id] = { icon: h.icon, name: h.name, evaluations: ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成'] }; } } return config; }
+
+    function generateAnimeAvatar(name, id) {
+        var student = null, cls = getCurrentClass();
+        for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === id) { student = cls.students[i]; break; }
+        var gender = (student && student.gender) || 'male';
+        var seed = 0, str = (name || '') + String(id || '');
+        for (var i = 0; i < str.length; i++) { seed = ((seed << 5) - seed) + str.charCodeAt(i); seed |= 0; }
+        var absSeed = Math.abs(seed);
+        var skinTones = ['#FDDCB5', '#F5C7A1', '#E8B48A'], hairColors = ['#1a1a2e', '#2c1810', '#5C3317', '#8B4513', '#D4A574', '#FFD700', '#FF6B6B', '#E91E63', '#9C27B0', '#2196F3'], eyeColors = ['#1a1a2e', '#1565C0', '#2E7D32', '#6A1B9A'], clothColors = ['#4a90e2', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+        var skin = skinTones[absSeed % skinTones.length], hair = hairColors[(absSeed >> 4) % hairColors.length], eye = eyeColors[(absSeed >> 8) % eyeColors.length], cloth = clothColors[(absSeed >> 12) % clothColors.length], bg = cloth + '22';
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="' + bg + '"/><ellipse cx="50" cy="82" rx="28" ry="18" fill="' + cloth + '"/><circle cx="50" cy="48" r="24" fill="' + skin + '"/>';
+        if (gender === 'female') { svg += '<ellipse cx="50" cy="34" rx="28" ry="20" fill="' + hair + '"/><rect x="20" y="28" width="14" height="42" rx="7" fill="' + hair + '"/><rect x="66" y="28" width="14" height="42" rx="7" fill="' + hair + '"/>'; }
+        else { svg += '<ellipse cx="50" cy="36" rx="26" ry="18" fill="' + hair + '"/><rect x="24" y="30" width="52" height="10" rx="5" fill="' + hair + '"/>'; }
+        svg += '<ellipse cx="40" cy="48" rx="4" ry="5" fill="white"/><ellipse cx="60" cy="48" rx="4" ry="5" fill="white"/><ellipse cx="41" cy="49" rx="2.5" ry="3" fill="' + eye + '"/><ellipse cx="61" cy="49" rx="2.5" ry="3" fill="' + eye + '"/><circle cx="42" cy="47.5" r="1" fill="white"/><circle cx="62" cy="47.5" r="1" fill="white"/><path d="M 44 58 Q 50 63 56 58" stroke="#e88" stroke-width="1.5" fill="none" stroke-linecap="round"/><ellipse cx="34" cy="54" rx="4" ry="2.5" fill="#FFB6C1" opacity="0.5"/><ellipse cx="66" cy="54" rx="4" ry="2.5" fill="#FFB6C1" opacity="0.5"/></svg>';
+        return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    }
+
+    function getStudentAvatarHtml(student, avatarClass) { if (student.photo) return '<div class="' + avatarClass + '"><img src="' + student.photo + '" alt="' + student.name + '"></div>'; var avatarUrl = generateAnimeAvatar(student.name, student.id); return '<div class="' + avatarClass + '"><img src="' + avatarUrl + '" alt="' + student.name + '"></div>'; }
+
+    function getCurrentClass() { for (var i = 0; i < appData.classes.length; i++) if (appData.classes[i].id === appData.currentClassId) return appData.classes[i]; return appData.classes[0]; }
+
+    var soundFunctions = {};
+    function createSoundFunctions() { ['success1', 'ding', 'chime'].forEach(function(type) { soundFunctions[type] = function() { try { var ac = new(window.AudioContext || window.webkitAudioContext)(); var osc = ac.createOscillator(), gain = ac.createGain(); osc.connect(gain); gain.connect(ac.destination); if (type === 'success1') { osc.frequency.setValueAtTime(523.25, ac.currentTime); osc.frequency.setValueAtTime(659.25, ac.currentTime + 0.1); osc.frequency.setValueAtTime(783.99, ac.currentTime + 0.2); gain.gain.setValueAtTime(0.3, ac.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + 0.4); osc.start(ac.currentTime); osc.stop(ac.currentTime + 0.4); } else if (type === 'ding') { osc.type = 'sine'; osc.frequency.setValueAtTime(2000, ac.currentTime); gain.gain.setValueAtTime(0.3, ac.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + 0.5); osc.start(ac.currentTime); osc.stop(ac.currentTime + 0.5); } else if (type === 'chime') { osc.type = 'sine'; osc.frequency.setValueAtTime(800, ac.currentTime); osc.frequency.setValueAtTime(1000, ac.currentTime + 0.1); osc.frequency.setValueAtTime(1200, ac.currentTime + 0.2); gain.gain.setValueAtTime(0.2, ac.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + 0.6); osc.start(ac.currentTime); osc.stop(ac.currentTime + 0.6); } } catch(e) {} }; }); }
+    function playCheckinSound() { if (appData.soundEnabled && soundFunctions[appData.checkinSound]) soundFunctions[appData.checkinSound](); }
+
+    function loadData() { try { var s = localStorage.getItem('checkinSystemData'); if (s) appData = mergeData(defaultAppData, JSON.parse(s)); else initSampleData(); } catch(e) { appData = JSON.parse(JSON.stringify(defaultAppData)); initSampleData(); } }
+    function mergeData(d, s) { var r = JSON.parse(JSON.stringify(d)); for (var k in s) if (s.hasOwnProperty(k)) r[k] = s[k]; if (!r.teachers || !r.teachers.length) r.teachers = [{id:'default',name:'默认教师',pin:r.password||'000000'}]; if (!r.classes || !r.classes.length) r.classes = [{id:'class_1',name:'一班',gridRows:4,gridCols:5,students:[],checkinSlots:[]}]; if (!r.currentClassId) r.currentClassId = r.classes[0].id; return r; }
+    function saveData() { try { localStorage.setItem('checkinSystemData', JSON.stringify(appData)); } catch(e) { alert('存储空间不足'); } }
+    function initSampleData() { var cls = appData.classes[0]; cls.students = [{id:1,name:'小明',photo:null,hints:['schoolbag','water'],gender:'male'},{id:2,name:'小红',photo:null,hints:['coat'],gender:'female'},{id:3,name:'小华',photo:null,hints:['book'],gender:'male'},{id:4,name:'小丽',photo:null,hints:['water'],gender:'female'},{id:5,name:'小强',photo:null,hints:['schoolbag'],gender:'male'},{id:6,name:'小芳',photo:null,hints:['coat'],gender:'female'},{id:7,name:'小伟',photo:null,hints:[],gender:'male'},{id:8,name:'小静',photo:null,hints:['water','book'],gender:'female'}]; appData.nextStudentId = 100; initCheckinSlots(); saveData(); }
+    function initCheckinSlots() { var cls = getCurrentClass(), t = cls.gridRows * cls.gridCols; cls.checkinSlots = []; for (var i = 0; i < t; i++) cls.checkinSlots.push({id:i,studentId:null,checkinTime:null}); }
+
+    function initLockScreen() { populateTeacherSelect(); document.getElementById('keypad').addEventListener('click', function(e) { var b = e.target.closest('.keypad-btn'); if (b) handleKeypadInput(b.getAttribute('data-value')); }); document.getElementById('guestModeBtn').addEventListener('click', enterGuestMode); }
+    function handleKeypadInput(v) { document.getElementById('errorMsg').classList.remove('show'); if (v === 'clear') { if (currentPassword.length > 0) { currentPassword = currentPassword.slice(0, -1); updatePasswordDots(); } } else if (v === 'enter') { if (currentPassword.length === 6) validatePassword(); } else { if (currentPassword.length < 6) { currentPassword += v; updatePasswordDots(); if (currentPassword.length === 6) setTimeout(validatePassword, 300); } } }
+    function updatePasswordDots() { for (var i = 0; i < 6; i++) { var d = document.getElementById('dot' + i); if (i < currentPassword.length) d.classList.add('filled'); else d.classList.remove('filled'); } }
+    function validatePassword() { var tid = document.getElementById('teacherSelect').value || 'default', teacher = null; for (var i = 0; i < appData.teachers.length; i++) if (appData.teachers[i].id === tid) { teacher = appData.teachers[i]; break; } if ((teacher && currentPassword === teacher.pin) || currentPassword === appData.password) { selectedTeacherId = tid; unlockSystem(); return; } document.getElementById('errorMsg').classList.add('show'); currentPassword = ''; updatePasswordDots(); }
+    function unlockSystem() { isGuestMode = false; document.getElementById('lockscreen').classList.add('hidden'); currentPassword = ''; updatePasswordDots(); updateLockStatusIcon(); document.getElementById('guestModeBar').classList.remove('active'); updateCurrentDate(); initApp(); }
+    function enterGuestMode() { isGuestMode = true; document.getElementById('lockscreen').classList.add('hidden'); currentPassword = ''; updatePasswordDots(); updateLockStatusIcon(); document.getElementById('guestModeBar').classList.add('active'); updateCurrentDate(); initApp(); }
+    function updateLockStatusIcon() { var b = document.getElementById('lockStatusBtn'), i = b.querySelector('i'); b.className = 'lock-status ' + (isGuestMode ? 'guest' : 'unlocked'); i.className = isGuestMode ? 'fas fa-user' : 'fas fa-unlock'; }
+    function lockScreen() { isGuestMode = false; document.getElementById('lockscreen').classList.remove('hidden'); currentPassword = ''; updatePasswordDots(); var b = document.getElementById('lockStatusBtn'); b.className = 'lock-status locked'; b.querySelector('i').className = 'fas fa-lock'; }
+    function populateTeacherSelect() { var s = document.getElementById('teacherSelect'); s.innerHTML = ''; appData.teachers.forEach(function(t) { var o = document.createElement('option'); o.value = t.id; o.textContent = t.name; s.appendChild(o); }); s.value = selectedTeacherId || 'default'; }
+    function addTeacher() { var n = document.getElementById('newTeacherName').value.trim(), p = document.getElementById('newTeacherPin').value; if (!n || !p || p.length !== 6 || !/^\d{6}$/.test(p)) { alert('请输入教师姓名和6位数字PIN'); return; } appData.teachers.push({id:'teacher_' + Date.now(), name:n, pin:p}); saveData(); populateTeacherSelect(); renderTeacherManageList(); document.getElementById('newTeacherName').value = ''; document.getElementById('newTeacherPin').value = ''; }
+    function deleteTeacher(id) { if (appData.teachers.length <= 1) { alert('至少保留一个教师'); return; } if (confirm('确定删除?')) { appData.teachers = appData.teachers.filter(function(t) { return t.id !== id; }); saveData(); populateTeacherSelect(); renderTeacherManageList(); } }
+    function renderTeacherManageList() { var l = document.getElementById('teacherManageList'); if (!l) return; l.innerHTML = ''; appData.teachers.forEach(function(t) { var d = document.createElement('div'); d.className = 'teacher-item'; d.innerHTML = '<div class="teacher-info"><div class="teacher-avatar-small"><i class="fas fa-user"></i></div><span>' + t.name + '</span></div><button class="btn btn-danger btn-sm" onclick="deleteTeacher(\'' + t.id + '\')"><i class="fas fa-trash"></i></button>'; l.appendChild(d); }); }
+
+    function initApp() { checkAutoReset(); renderStudentPool(); renderCheckinArea(); updateCounts(); }
+    function checkAutoReset() { var today = formatDate(); if (appData.lastCheckinDate && appData.lastCheckinDate !== today) { appData.classes.forEach(function(cls) { cls.checkinSlots.forEach(function(s) { s.studentId = null; s.checkinTime = null; }); }); appData.lastCheckinDate = today; saveData(); } else if (!appData.lastCheckinDate) { appData.lastCheckinDate = today; saveData(); } }
+
+    function switchSection(s) { document.querySelectorAll('.content-section,.chart-container,.table-container').forEach(function(el) { el.style.display = 'none'; }); document.getElementById(s + 'Section').style.display = 'block'; document.querySelectorAll('.nav-item').forEach(function(it) { it.classList.remove('active'); }); var a = document.querySelector('[onclick="switchSection(\'' + s + '\')"]'); if (a) a.classList.add('active'); if (s === 'chart') initChart(); else if (s === 'table') { var today = formatDate(); var tds = document.getElementById('tableDateStart'); var tde = document.getElementById('tableDateEnd'); if (!tds.value) tds.value = today; if (!tde.value) tde.value = today; renderRecordsTable(); } else if (s === 'class') { renderClassTabs(); loadClassSettings(); } }
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function updateCurrentDate() { try { var now = new Date(), h = pad2(now.getHours()), mi = pad2(now.getMinutes()), sec = pad2(now.getSeconds()), y = now.getFullYear(), mo = pad2(now.getMonth() + 1), d = pad2(now.getDate()), weeks = ['日', '一', '二', '三', '四', '五', '六'], w = weeks[now.getDay()]; var timeEl = document.getElementById('mainClockTime'); var dateEl = document.getElementById('mainClockDate'); if (timeEl) timeEl.innerHTML = h + '<span style="opacity:0.4">:</span>' + mi + '<span style="opacity:0.4">:</span>' + sec; if (dateEl) dateEl.innerHTML = y + '年' + mo + '月' + d + '日 星期' + w; } catch(e) {} }
+    function formatTime(t) { if (!t) return ''; var d = new Date(t); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+    function formatDate(d) { var dt = d ? new Date(d) : new Date(); return dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()); }
+
+    var selectedStudentId = null;
+    function renderStudentPool() { var cls = getCurrentClass(), pool = document.getElementById('studentPool'), cids = [], hc = getHintConfig(); cls.checkinSlots.forEach(function(s) { if (s.studentId !== null) cids.push(s.studentId); }); var unc = cls.students.filter(function(s) { return cids.indexOf(s.id) === -1; }); if (!unc.length) { pool.innerHTML = '<p style="text-align:center;color:#999;padding:1.5rem;">所有学生已打卡</p>'; return; } var h = ''; unc.forEach(function(s) { var av = getStudentAvatarHtml(s, 'student-avatar'); var tags = ''; if (s.hints && s.hints.length) { tags = '<div class="hint-tags">'; s.hints.forEach(function(hi) { var cfg = hc[hi]; if (cfg) tags += '<span class="hint-tag">' + cfg.icon + '</span>'; }); tags += '</div>'; } var isSelected = selectedStudentId === s.id ? 'selected' : ''; h += '<div class="student-card ' + isSelected + '" onclick="selectPoolStudent(' + s.id + ')">' + av + '<div class="student-name">' + s.name + '</div>' + tags + '</div>'; }); pool.innerHTML = h; }
+    function selectPoolStudent(sid) { selectedStudentId = sid; renderStudentPool(); renderCheckinArea(); }
+
+    function renderCheckinArea() { var cls = getCurrentClass(), area = document.getElementById('checkinArea'), hc = getHintConfig(); area.style.gridTemplateColumns = 'repeat(' + cls.gridCols + ', 1fr)'; var h = ''; cls.checkinSlots.forEach(function(slot, idx) { var student = null; if (slot.studentId !== null) for (var j = 0; j < cls.students.length; j++) if (cls.students[j].id === slot.studentId) { student = cls.students[j]; break; } if (student) { var hb = ''; if (student.hints && student.hints.length) { hb = '<div class="hint-badges">'; student.hints.forEach(function(hi) { var cfg = hc[hi]; if (cfg) hb += '<span class="hint-badge">' + cfg.icon + '</span>'; }); hb += '</div>'; } var av = getStudentAvatarHtml(student, 'checked-avatar'); h += '<div class="checkin-slot filled" onclick="openStudentActionModal(' + student.id + ',' + slot.id + ')"><div class="checked-student">' + hb + av + '<div class="checked-name">' + student.name + '</div><div class="checkin-time">' + formatTime(slot.checkinTime) + '</div><div class="student-actions" onclick="event.stopPropagation()"><button class="action-btn action-btn-hint" onclick="openHintModal(' + student.id + ')"><i class="fas fa-tags"></i></button><button class="action-btn action-btn-record" onclick="openRecordModal(' + student.id + ')"><i class="fas fa-clipboard"></i></button><button class="action-btn action-btn-remove" onclick="removeStudent(' + slot.id + ')"><i class="fas fa-times"></i></button></div></div></div>'; } else { var availClass = selectedStudentId !== null ? 'available' : ''; var slotClick = selectedStudentId !== null ? 'onclick="assignSelectedStudent(' + slot.id + ')"' : ''; h += '<div class="checkin-slot ' + availClass + '" ' + slotClick + '><div class="slot-number">位置 ' + (idx + 1) + '</div><div class="empty-slot"><i class="fas fa-plus" style="font-size:1.2rem;margin-bottom:0.2rem;"></i><br>点击打卡</div></div>'; } }); area.innerHTML = h; }
+    function assignSelectedStudent(slotId) { if (selectedStudentId === null) return; var cls = getCurrentClass(), s = cls.checkinSlots[slotId]; if (s && s.studentId === null) { s.studentId = selectedStudentId; s.checkinTime = new Date().toISOString(); appData.lastCheckinDate = formatDate(); playCheckinSound(); saveData(); selectedStudentId = null; renderStudentPool(); renderCheckinArea(); updateCounts(); } }
+    function removeStudent(slid) { var cls = getCurrentClass(), s = cls.checkinSlots[slid]; if (s) { s.studentId = null; s.checkinTime = null; saveData(); renderStudentPool(); renderCheckinArea(); updateCounts(); } }
+    function resetCheckin() { if (!confirm('确定要重置所有打卡记录吗？')) return; var cls = getCurrentClass(); cls.checkinSlots.forEach(function(s) { s.studentId = null; s.checkinTime = null; }); saveData(); selectedStudentId = null; renderStudentPool(); renderCheckinArea(); updateCounts(); }
+    function updateCounts() { var cls = getCurrentClass(), total = cls.students.length, checked = 0, cids = []; cls.checkinSlots.forEach(function(s) { if (s.studentId !== null) { checked++; cids.push(s.studentId); } }); document.getElementById('totalStat').textContent = total; document.getElementById('checkedStat').textContent = checked; document.getElementById('remainingStat').textContent = total - checked; var rem = cls.students.filter(function(s) { return cids.indexOf(s.id) === -1; }); var sec = document.getElementById('remainingSection'), list = document.getElementById('remainingList'); if (rem.length > 0 && checked > 0) { sec.style.display = 'block'; var h = ''; rem.forEach(function(s) { var av = '<img src="' + (s.photo || generateAnimeAvatar(s.name, s.id)) + '" style="width:20px;height:20px;border-radius:50%;">'; h += '<div class="remaining-item">' + av + s.name + '</div>'; }); list.innerHTML = h; } else { sec.style.display = 'none'; } }
+
+    function completeAndSave() { var cls = getCurrentClass(); if (cls.checkinSlots.filter(function(s) { return s.studentId !== null; }).length === 0) { alert('还没有学生打卡'); return; } if (!confirm('确定已完成今日打卡？')) return; var today = formatDate(), records = []; cls.checkinSlots.forEach(function(slot) { if (slot.studentId === null) return; var student = null; for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === slot.studentId) { student = cls.students[i]; break; } if (!student) return; var evals = {}; if (student.hints) student.hints.forEach(function(h) { evals[h] = '未评价'; }); records.push({studentId: student.id, studentName: student.name, checkinTime: slot.checkinTime, hints: student.hints || [], evaluations: evals, note: ''}); }); appData.dailyTables[today] = records; saveData(); document.getElementById('tableDateStart').value = today; document.getElementById('tableDateEnd').value = today; switchSection('table'); alert('已生成' + today + '的打卡记录！'); }
+
+    function openAddStudentModal() { document.getElementById('studentName').value = ''; tempPhotoData = null; document.getElementById('addStudentModal').classList.add('active'); }
+    function selectGender(g) { tempGender = g; var ml = document.getElementById('genderMaleLabel'), fl = document.getElementById('genderFemaleLabel'); if (g === 'male') { ml.style.borderColor = 'var(--primary-color)'; ml.style.background = 'rgba(74,144,226,0.1)'; fl.style.borderColor = 'var(--border-color)'; fl.style.background = 'transparent'; } else { fl.style.borderColor = 'var(--primary-color)'; fl.style.background = 'rgba(74,144,226,0.1)'; ml.style.borderColor = 'var(--border-color)'; ml.style.background = 'transparent'; } }
+    function previewPhoto(input) { var f = input.files[0]; if (f) { var r = new FileReader(); r.onload = function(e) { tempPhotoData = e.target.result; }; r.readAsDataURL(f); } }
+    function addStudent() { var n = document.getElementById('studentName').value.trim(); if (!n) { alert('请输入学生姓名'); return; } var cls = getCurrentClass(); cls.students.push({id: getNextStudentId(), name: n, photo: tempPhotoData, hints: [], gender: tempGender}); saveData(); renderStudentPool(); updateCounts(); loadClassSettings(); closeModal('addStudentModal'); }
+    function openBatchAddModal() { document.getElementById('batchNames').value = ''; document.getElementById('batchAddModal').classList.add('active'); }
+    function batchAddStudents() { var text = document.getElementById('batchNames').value.trim(); if (!text) { alert('请输入学生姓名'); return; } var names = text.split('\n').map(function(n) { return n.trim(); }).filter(function(n) { return n; }); if (!names.length) { alert('请输入至少一个学生'); return; } var cls = getCurrentClass(); names.forEach(function(name) { cls.students.push({id: getNextStudentId(), name: name, photo: null, hints: [], gender: 'male'}); }); saveData(); renderStudentPool(); updateCounts(); loadClassSettings(); closeModal('batchAddModal'); alert('成功添加' + names.length + '名学生！'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    function openHintModal(sid) { currentStudentId = sid; var cls = getCurrentClass(), student = null; for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === sid) { student = cls.students[i]; break; } if (!student) return; document.getElementById('hintStudentName').textContent = student.name; selectedHints = (student.hints || []).slice(); renderHintOptions(); document.getElementById('hintModal').classList.add('active'); }
+    function renderHintOptions() { var hc = getHintConfig(), container = document.getElementById('hintOptions'), h = ''; for (var key in hc) { var cfg = hc[key]; if (!hc.hasOwnProperty(key)) continue; var sel = selectedHints.indexOf(key) !== -1 ? 'selected' : ''; h += '<div class="hint-option ' + sel + '" data-hint="' + key + '" onclick="toggleHint(this)"><span class="hint-option-icon">' + cfg.icon + '</span><span>' + cfg.name + '</span></div>'; } container.innerHTML = h; }
+    function toggleHint(el) { var h = el.dataset.hint; if (el.classList.contains('selected')) { el.classList.remove('selected'); selectedHints = selectedHints.filter(function(x) { return x !== h; }); } else { el.classList.add('selected'); selectedHints.push(h); } }
+    function saveHints() { var cls = getCurrentClass(), s = null; for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === currentStudentId) { s = cls.students[i]; break; } if (s) { s.hints = selectedHints.slice(); saveData(); renderCheckinArea(); closeModal('hintModal'); } }
+
+    function openRecordModal(sid) { currentStudentId = sid; var cls = getCurrentClass(), student = null; for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === sid) { student = cls.students[i]; break; } if (!student) return; document.getElementById('recordStudentName').textContent = student.name; document.getElementById('recordNote').value = ''; var sec = document.getElementById('evaluationSection'); sec.innerHTML = ''; selectedEvaluations = {}; var hc = getHintConfig(); if (student.hints && student.hints.length) { student.hints.forEach(function(hint) { var cfg = hc[hint]; if (!cfg) return; var opts = ''; cfg.evaluations.forEach(function(ev) { opts += '<div class="eval-option" data-hint="' + hint + '" data-eval="' + ev + '" onclick="selectEvaluation(this)">' + ev + '</div>'; }); var item = document.createElement('div'); item.className = 'evaluation-item'; item.innerHTML = '<div class="evaluation-header"><div class="evaluation-icon">' + cfg.icon + '</div><span>' + cfg.name + '</span></div><div class="evaluation-options">' + opts + '</div>'; sec.appendChild(item); }); } else { sec.innerHTML = '<p style="color:#666;text-align:center;padding:1.5rem;">该学生没有提示标记</p>'; } document.getElementById('recordModal').classList.add('active'); }
+    function selectEvaluation(el) { var h = el.dataset.hint; document.querySelectorAll('[data-hint="' + h + '"]').forEach(function(e) { e.classList.remove('selected'); }); el.classList.add('selected'); selectedEvaluations[h] = el.dataset.eval; }
+    function saveRecord() { var cls = getCurrentClass(), s = null; for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === currentStudentId) { s = cls.students[i]; break; } if (s) { appData.records.push({id: Date.now(), studentId: s.id, studentName: s.name, timestamp: new Date().toISOString(), evaluations: JSON.parse(JSON.stringify(selectedEvaluations)), note: document.getElementById('recordNote').value}); saveData(); closeModal('recordModal'); } }
+
+    function openSettings() { document.getElementById('systemPassword').value = ''; document.getElementById('soundEnabled').value = appData.soundEnabled.toString(); document.getElementById('checkinSound').value = appData.checkinSound; renderTeacherManageList(); document.getElementById('settingsModal').classList.add('active'); }
+    function saveSettings() { var p = document.getElementById('systemPassword').value; if (p && p.length === 6 && /^\d{6}$/.test(p)) appData.password = p; appData.soundEnabled = document.getElementById('soundEnabled').value === 'true'; appData.checkinSound = document.getElementById('checkinSound').value; saveData(); closeModal('settingsModal'); }
+
+    var currentSlotId = null;
+    function openStudentActionModal(sid, slotId) { currentStudentId = sid; currentSlotId = slotId; var cls = getCurrentClass(), student = null; for (var i = 0; i < cls.students.length; i++) if (cls.students[i].id === sid) { student = cls.students[i]; break; } if (!student) return; document.getElementById('actionStudentName').textContent = student.name; document.getElementById('studentActionModal').classList.add('active'); }
+    function removeStudentFromCheckin() { if (currentSlotId !== null) removeStudent(currentSlotId); }
+
+    function renderClassTabs() { var container = document.getElementById('classTabs'), h = ''; appData.classes.forEach(function(c) { var active = c.id === appData.currentClassId ? 'active' : ''; h += '<div class="class-tab ' + active + '" onclick="switchClass(\'' + c.id + '\')">' + c.name + '</div>'; }); h += '<div class="class-tab-add" onclick="addClass()"><i class="fas fa-plus"></i> 新增</div>'; container.innerHTML = h; }
+    function switchClass(id) { appData.currentClassId = id; saveData(); selectedStudentId = null; renderClassTabs(); loadClassSettings(); initApp(); }
+    function addClass() { var name = prompt('请输入新班级名称：'); if (!name || !name.trim()) return; var newClass = {id: 'class_' + Date.now(), name: name.trim(), gridRows: 4, gridCols: 5, students: [], checkinSlots: []}; var t = newClass.gridRows * newClass.gridCols; for (var i = 0; i < t; i++) newClass.checkinSlots.push({id: i, studentId: null, checkinTime: null}); appData.classes.push(newClass); appData.currentClassId = newClass.id; saveData(); selectedStudentId = null; renderClassTabs(); loadClassSettings(); initApp(); }
+    function deleteCurrentClass() { if (appData.classes.length <= 1) { alert('至少保留一个班级'); return; } var cls = getCurrentClass(); if (!confirm('确定要删除班级"' + cls.name + '"吗？')) return; appData.classes = appData.classes.filter(function(c) { return c.id !== appData.currentClassId; }); appData.currentClassId = appData.classes[0].id; saveData(); selectedStudentId = null; renderClassTabs(); loadClassSettings(); initApp(); }
+    function loadClassSettings() { var cls = getCurrentClass(); document.getElementById('className').value = cls.name; document.getElementById('classCount').value = cls.students.length; document.getElementById('gridRows').value = cls.gridRows; document.getElementById('gridCols').value = cls.gridCols; var l = document.getElementById('studentManageList'), h = ''; cls.students.forEach(function(s) { var av = s.photo ? '<img src="' + s.photo + '" style="width:36px;height:36px;border-radius:50%;">' : '<img src="' + generateAnimeAvatar(s.name, s.id) + '" style="width:36px;height:36px;border-radius:50%;">'; h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;border-bottom:1px solid var(--border-color);"><div style="display:flex;align-items:center;gap:0.6rem;">' + av + '<span>' + s.name + '</span></div><button class="btn btn-danger btn-sm" onclick="deleteStudent(' + s.id + ')">删除</button></div>'; }); l.innerHTML = h; }
+    function saveClassSettings() { var cls = getCurrentClass(); cls.name = document.getElementById('className').value || '一班'; var nr = parseInt(document.getElementById('gridRows').value) || 4, nc = parseInt(document.getElementById('gridCols').value) || 5; if (nr !== cls.gridRows || nc !== cls.gridCols) { cls.gridRows = nr; cls.gridCols = nc; initCheckinSlots(); } saveData(); selectedStudentId = null; renderClassTabs(); renderCheckinArea(); renderStudentPool(); updateCounts(); }
+    function deleteStudent(sid) { if (!confirm('确定要删除这个学生吗？')) return; var cls = getCurrentClass(); cls.students = cls.students.filter(function(s) { return s.id !== sid; }); cls.checkinSlots.forEach(function(s) { if (s.studentId === sid) { s.studentId = null; s.checkinTime = null; } }); saveData(); selectedStudentId = null; renderStudentPool(); renderCheckinArea(); loadClassSettings(); updateCounts(); }
+
+    function backupData() { var backupObj = JSON.parse(JSON.stringify(appData)); var b = new Blob([JSON.stringify(backupObj, null, 2)], {type: 'application/json'}), u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = '电子打卡备份_' + formatDate() + '.json'; a.click(); URL.revokeObjectURL(u); }
+    function restoreData() { document.getElementById('restoreFileInput').click(); }
+    function handleRestoreFile(input) { var f = input.files[0]; if (!f) return; var r = new FileReader(); r.onload = function(e) { try { var d = JSON.parse(e.target.result); if (!d || typeof d !== 'object') { alert('备份文件格式不正确'); return; } if (confirm('确定要恢复此备份吗？')) { appData = mergeData(defaultAppData, d); saveData(); alert('数据恢复成功！'); location.reload(); } } catch (err) { alert('读取失败：' + err.message); } }; r.readAsText(f); input.value = ''; }
+
+    function setChartType(type, el) { currentChartType = type; document.querySelectorAll('.chart-type-btn').forEach(function(b) { b.classList.remove('active'); }); if (el) el.classList.add('active'); initChart(); }
+    function populateChartStudentFilter() { var sel = document.getElementById('chartStudentFilter'), cls = getCurrentClass(); var curVal = sel.value; sel.innerHTML = '<option value="all">全部学生</option>'; cls.students.forEach(function(s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sel.appendChild(o); }); if (curVal) sel.value = curVal; }
+    function initChart() { populateChartStudentFilter(); var ctx = document.getElementById('checkinChart').getContext('2d'); if (checkinChart) checkinChart.destroy(); var ds = document.getElementById('chartDateStart'), de = document.getElementById('chartDateEnd'); if (!ds.value) ds.value = formatDate(); if (!de.value) de.value = ds.value; var range = getChartDateRange(), hc = getHintConfig(); var records = getChartRecords(); if (records.length) { var allHints = []; records.forEach(function(r) { if (r.hints) r.hints.forEach(function(h) { if (allHints.indexOf(h) === -1) allHints.push(h); }); }); var hintNames = allHints.map(function(h) { var cfg = hc[h]; return cfg ? cfg.name : h; }); var evalTypes = ['独立完成', '肢体辅助', '口语提示', '示范动作', '未完成', '未评价']; var evalColors = ['#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#95a5a6', '#bdc3c7']; if (currentChartType === 'pie' || currentChartType === 'doughnut') { var evalCounts = {}; evalTypes.forEach(function(ev) { evalCounts[ev] = 0; }); records.forEach(function(r) { if (r.evaluations) { for (var k in r.evaluations) { if (r.evaluations[k] && evalCounts.hasOwnProperty(r.evaluations[k])) evalCounts[r.evaluations[k]]++; } } }); var labels = [], data = [], colors = []; evalTypes.forEach(function(ev, i) { if (evalCounts[ev] > 0) { labels.push(ev); data.push(evalCounts[ev]); colors.push(evalColors[i]); } }); if (!data.length) { labels = ['暂无数据']; data = [1]; colors = ['#bdc3c7']; } checkinChart = new Chart(ctx, {type: currentChartType, data: {labels: labels, datasets: [{data: data, backgroundColor: colors.map(function(c) { return c + 'cc'; }), borderColor: colors, borderWidth: 1}]}, options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right'}}}}); } else { var datasets = evalTypes.map(function(ev, ei) { var data = allHints.map(function(hint) { var count = 0; records.forEach(function(r) { if (r.evaluations && r.evaluations[hint] === ev) count++; }); return count; }); return {label: ev, data: data, backgroundColor: evalColors[ei] + 'cc', borderColor: evalColors[ei], borderWidth: 1}; }); checkinChart = new Chart(ctx, {type: 'bar', data: {labels: hintNames, datasets: datasets}, options: {responsive: true, maintainAspectRatio: false, scales: {x: {stacked: true}, y: {stacked: true, beginAtZero: true, ticks: {precision: 0}}}, plugins: {legend: {position: 'top'}}}}); } } else { checkinChart = new Chart(ctx, {type: 'bar', data: {labels: ['暂无数据'], datasets: [{label: '暂无数据', data: [0], backgroundColor: '#bdc3c7'}]}, options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true}}}}); } }
+    function generateTodayTable() { var today = formatDate(); document.getElementById('tableDateStart').value = today; document.getElementById('tableDateEnd').value = today; renderRecordsTable(); }
+    function getChartDateRange() { var ds = document.getElementById('chartDateStart').value, de = document.getElementById('chartDateEnd').value; if (!ds) ds = formatDate(); if (!de) de = ds; if (ds > de) { var t = ds; ds = de; de = t; } return {start: ds, end: de}; }
+    function getChartRecords() { var range = getChartDateRange(), filter = document.getElementById('chartStudentFilter').value; var allRecords = []; for (var d = range.start; d <= range.end;) { var daily = appData.dailyTables[d]; if (daily && daily.length) { daily.forEach(function(r) { if (filter === 'all' || String(r.studentId) === String(filter)) allRecords.push(Object.assign({}, r, {date: d})); }); } var parts = d.split('-'); var dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); dt.setDate(dt.getDate() + 1); d = formatDate(dt); } return allRecords; }
+    function chartDateToday() { var today = formatDate(); document.getElementById('chartDateStart').value = today; document.getElementById('chartDateEnd').value = today; initChart(); }
+    function chartDateThisWeek() { var now = new Date(), day = now.getDay() || 7, mon = new Date(now); mon.setDate(now.getDate() - day + 1); var sun = new Date(mon); sun.setDate(mon.getDate() + 6); document.getElementById('chartDateStart').value = formatDate(mon); document.getElementById('chartDateEnd').value = formatDate(sun); initChart(); }
+    function tableDateToday() { var today = formatDate(); document.getElementById('tableDateStart').value = today; document.getElementById('tableDateEnd').value = today; renderRecordsTable(); }
+    function tableDateThisWeek() { var now = new Date(), day = now.getDay() || 7, mon = new Date(now); mon.setDate(now.getDate() - day + 1); var sun = new Date(mon); sun.setDate(mon.getDate() + 6); document.getElementById('tableDateStart').value = formatDate(mon); document.getElementById('tableDateEnd').value = formatDate(sun); renderRecordsTable(); }
+
+    function populateStudentFilter() { var sel = document.getElementById('tableStudentFilter'), cls = getCurrentClass(); var curVal = sel.value; sel.innerHTML = '<option value="all">全部学生</option>'; cls.students.forEach(function(s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sel.appendChild(o); }); if (curVal) sel.value = curVal; }
+    function getTableDateRange() { var ds = document.getElementById('tableDateStart').value, de = document.getElementById('tableDateEnd').value; if (!ds) ds = formatDate(); if (!de) de = ds; if (ds > de) { var t = ds; ds = de; de = t; } return {start: ds, end: de}; }
+    function getFilteredRecords() { var range = getTableDateRange(), filter = document.getElementById('tableStudentFilter').value; var allRecords = []; for (var d = range.start; d <= range.end;) { var daily = appData.dailyTables[d]; if (daily && daily.length) { daily.forEach(function(r) { if (filter === 'all' || String(r.studentId) === String(filter)) allRecords.push(Object.assign({}, r, {date: d})); }); } var parts = d.split('-'); var dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); dt.setDate(dt.getDate() + 1); d = formatDate(dt); } return allRecords; }
+    function renderRecordsTable() { populateStudentFilter(); var records = getFilteredRecords(), hc = getHintConfig(); var thead = document.getElementById('recordsTableHead'), tbody = document.getElementById('recordsTableBody'); var evalColorMap = {'独立完成': '#2ecc71', '肢体辅助': '#e74c3c', '口语提示': '#f39c12', '示范动作': '#9b59b6', '未完成': '#95a5a6', '未评价': '#bdc3c7'}; var range = getTableDateRange(); if (records.length) { var allHints = []; records.forEach(function(r) { if (r.hints) r.hints.forEach(function(h) { if (allHints.indexOf(h) === -1) allHints.push(h); }); }); var isMultiDay = range.start !== range.end; var hrow = '<tr><th>序号</th>'; if (isMultiDay) hrow += '<th>日期</th>'; hrow += '<th>学生</th><th>时间</th>'; allHints.forEach(function(h) { var cfg = hc[h]; hrow += '<th>' + (cfg ? cfg.icon + ' ' + cfg.name : h) + '</th>'; }); hrow += '<th>备注</th></tr>'; thead.innerHTML = hrow; var bhtml = ''; records.forEach(function(r, idx) { var row = '<tr><td>' + (idx + 1) + '</td>'; if (isMultiDay) row += '<td>' + r.date + '</td>'; row += '<td>' + r.studentName + '</td><td>' + formatTime(r.checkinTime) + '</td>'; allHints.forEach(function(h) { var ev = r.evaluations ? r.evaluations[h] : ''; var color = evalColorMap[ev] || 'transparent'; row += '<td style="background:' + color + '22;">' + (ev || '-') + '</td>'; }); row += '<td>' + (r.note || '') + '</td></tr>'; bhtml += row; }); tbody.innerHTML = bhtml; } else { thead.innerHTML = '<tr><th>序号</th><th>学生</th><th>时间</th><th>备注</th></tr>'; tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:#999;">暂无记录，请先完成打卡</td></tr>'; } }
+    function exportTableCSV() { var records = getFilteredRecords(), hc = getHintConfig(); if (!records.length) { alert('没有可导出的数据'); return; } var allHints = []; records.forEach(function(r) { if (r.hints) r.hints.forEach(function(h) { if (allHints.indexOf(h) === -1) allHints.push(h); }); }); var range = getTableDateRange(); var headers = ['序号', '学生姓名', '打卡时间']; allHints.forEach(function(h) { var cfg = hc[h]; headers.push(cfg ? cfg.name : h); }); headers.push('备注'); var rows = [headers.join(',')]; records.forEach(function(r, idx) { var row = [idx + 1, r.studentName, formatTime(r.checkinTime)]; allHints.forEach(function(h) { row.push(r.evaluations ? r.evaluations[h] || '-' : '-'); }); row.push(r.note || ''); rows.push(row.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',')); }); var bom = '\uFEFF'; var csv = bom + rows.join('\n'); var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'}); var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = '打卡记录_' + range.start + '.csv'; a.click(); URL.revokeObjectURL(url); }
+
+    function toggleTheme() { alert('主题切换功能开发中'); }
+
+    document.addEventListener('DOMContentLoaded', function() { createSoundFunctions(); loadData(); initLockScreen(); updateCurrentDate(); function tickClock() { updateCurrentDate(); setTimeout(tickClock, 1000); } tickClock(); var cds = document.getElementById('chartDateStart'); if (cds) cds.value = formatDate(); var cde = document.getElementById('chartDateEnd'); if (cde) cde.value = formatDate(); });
+
+    window.openAddStudentModal = openAddStudentModal; window.closeModal = closeModal; window.selectGender = selectGender; window.previewPhoto = previewPhoto; window.addStudent = addStudent; window.openBatchAddModal = openBatchAddModal; window.batchAddStudents = batchAddStudents; window.openHintModal = openHintModal; window.toggleHint = toggleHint; window.saveHints = saveHints; window.openRecordModal = openRecordModal; window.selectEvaluation = selectEvaluation; window.saveRecord = saveRecord; window.openSettings = openSettings; window.saveSettings = saveSettings; window.lockScreen = lockScreen; window.switchSection = switchSection; window.addTeacher = addTeacher; window.deleteTeacher = deleteTeacher; window.completeAndSave = completeAndSave; window.resetCheckin = removeStudent = removeStudent; window.removeStudentFromCheckin = removeStudentFromCheckin; window.switchClass = switchClass; window.addClass = addClass; window.deleteCurrentClass = deleteCurrentClass; window.renderClassTabs = renderClassTabs; window.saveClassSettings = saveClassSettings; window.loadClassSettings = loadClassSettings; window.deleteStudent = deleteStudent; window.selectPoolStudent = selectPoolStudent; window.assignSelectedStudent = assignSelectedStudent; window.openStudentActionModal = openStudentActionModal; window.initChart = initChart; window.setChartType = setChartType; window.chartDateToday = chartDateToday; window.chartDateThisWeek = chartDateThisWeek; window.generateTodayTable = generateTodayTable; window.renderRecordsTable = renderRecordsTable; window.tableDateToday = tableDateToday; window.tableDateThisWeek = tableDateThisWeek; window.exportTableCSV = exportTableCSV; window.backupData = backupData; window.restoreData = restoreData; window.handleRestoreFile = handleRestoreFile; window.toggleTheme = toggleTheme;
+    Object.defineProperty(window, 'currentStudentId', {get: function() { return currentStudentId; }, set: function(v) { currentStudentId = v; }});
+})();
+    </script>
+</body>
+</html>
